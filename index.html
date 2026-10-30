@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>足球無人機大冒險 - 趣味闖關</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Noto+Sans+TC:wght@400;700;900&display=swap');
+
+    body {
+      font-family: 'Fredoka', 'Noto Sans TC', sans-serif;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* 遊戲畫布陰影與圓角效果 */
+    .game-card {
+      box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.3), 0 0 20px rgba(56, 189, 248, 0.2);
+    }
+
+    /* 浮動按鈕立體感微動態 */
+    .touch-btn {
+      transition: all 0.08s ease-in-out;
+      box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
+    }
+    .touch-btn:active, .touch-btn.active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+    }
+
+    /* 光暈與動畫效果 */
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 10px #38bdf8); }
+      50% { opacity: 1; filter: drop-shadow(0 0 20px #818cf8); }
+    }
+    .pulse-glow {
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+
+    /* 自訂滾動條 (排行榜使用) */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5); 
+      border-radius: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #475569; 
+      border-radius: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #64748b; 
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 overflow-x-hidden select-none">
+
+  <div class="w-full max-w-4xl flex flex-col items-center">
+    
+    <!-- 頂部資訊看板 Header -->
+    <header class="w-full flex items-center justify-between bg-slate-800/90 backdrop-blur border border-slate-700 rounded-2xl px-4 py-2.5 mb-3 shadow-lg">
+      <div class="flex items-center space-x-2">
+        <div class="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 text-xl">
+          <i class="fa-solid fa-drone"></i>
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-black tracking-wide text-cyan-300">足球無人機闖關</h1>
+          <p class="text-xs text-slate-400 hidden sm:block">穿過光環球門，避開障礙到達終點！</p>
+        </div>
+      </div>
+
+      <!-- 分數與時間 -->
+      <div class="flex items-center gap-3 sm:gap-6">
+        <!-- 玩家名稱顯示 -->
+        <div class="hidden md:flex bg-slate-950/70 border border-slate-600 px-3 py-1 rounded-xl items-center gap-2">
+          <i class="fa-solid fa-user text-slate-400 text-sm"></i>
+          <div>
+            <div class="text-[10px] text-slate-400 font-bold leading-none">玩家</div>
+            <div id="currentPlayerDisplay" class="text-sm font-black text-slate-200 leading-tight truncate max-w-[80px]">---</div>
+          </div>
+        </div>
+
+        <!-- 分數 -->
+        <div class="bg-slate-950/70 border border-amber-500/40 px-3 py-1 rounded-xl flex items-center gap-2">
+          <i class="fa-solid fa-star text-amber-400 text-sm"></i>
+          <div>
+            <div class="text-[10px] text-amber-300 font-bold leading-none">分數</div>
+            <div id="scoreDisplay" class="text-lg sm:text-xl font-black text-amber-400 leading-tight">0</div>
+          </div>
+        </div>
+
+        <!-- 倒數時間 -->
+        <div class="bg-slate-950/70 border border-rose-500/40 px-3 py-1 rounded-xl flex items-center gap-2">
+          <i class="fa-solid fa-stopwatch text-rose-400 text-sm"></i>
+          <div>
+            <div class="text-[10px] text-rose-300 font-bold leading-none">剩餘時間</div>
+            <div id="timerDisplay" class="text-lg sm:text-xl font-black text-rose-400 leading-tight">45s</div>
+          </div>
+        </div>
+
+        <!-- 電量/生命值 -->
+        <div class="bg-slate-950/70 border border-emerald-500/40 px-3 py-1 rounded-xl flex items-center gap-2">
+          <i class="fa-solid fa-battery-half text-emerald-400 text-sm"></i>
+          <div>
+            <div class="text-[10px] text-emerald-300 font-bold leading-none">護盾</div>
+            <div id="hpDisplay" class="text-lg sm:text-xl font-black text-emerald-400 leading-tight">3</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="relative w-full aspect-[16/9] max-h-[480px] bg-slate-950 rounded-3xl border-4 border-slate-700 overflow-hidden game-card shadow-2xl">
+      <!-- 遊戲畫布 -->
+      <canvas id="gameCanvas" class="w-full h-full block"></canvas>
+
+      <!-- 進度條 -->
+      <div class="absolute top-2 left-1/2 -translate-x-1/2 w-48 sm:w-72 bg-slate-900/80 border border-slate-600 rounded-full h-3 p-0.5 flex items-center z-10">
+        <div id="progressBar" class="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 rounded-full transition-all duration-100" style="width: 0%;"></div>
+        <span class="absolute right-2 text-[9px] font-bold text-slate-300">終點 🏁</span>
+      </div>
+
+      <!-- 開始畫面 (Start Screen) - 包含登入與排行榜 -->
+      <div id="startScreen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center z-20 overflow-y-auto custom-scrollbar">
+        
+        <div class="flex items-center gap-3 mb-2 mt-4 sm:mt-0">
+          <div class="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-300 text-2xl pulse-glow">
+            ⚽
+          </div>
+          <h2 class="text-xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-emerald-300">
+            足球無人機飛行賽
+          </h2>
+        </div>
+        
+        <p class="text-slate-400 text-xs mb-4">穿過<span class="text-amber-300">黃金球門</span>，避開<span class="text-rose-400">紅色障礙</span>！</p>
+
+        <!-- 登入區域 -->
+        <div class="w-full max-w-xs mb-4">
+          <input type="text" id="usernameInput" placeholder="請輸入玩家名稱..." maxlength="12" class="w-full px-4 py-2.5 rounded-xl bg-slate-800/80 text-white border-2 border-slate-600 focus:border-cyan-400 outline-none text-center font-bold placeholder-slate-500 shadow-inner transition-colors">
+          <p id="nameError" class="text-rose-400 text-xs font-bold mt-1 hidden transition-all">請輸入名稱才能開始遊戲！</p>
+        </div>
+
+        <!-- 按鈕 -->
+        <button id="startBtn" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-lg px-10 py-3 rounded-2xl shadow-lg shadow-cyan-500/30 transform active:scale-95 transition-all flex items-center gap-2 mb-6">
+          <i class="fa-solid fa-play"></i>
+          開始遊戲
+        </button>
+
+        <!-- 排行榜 (Leaderboard) -->
+        <div class="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-2xl p-3 shadow-inner">
+          <h3 class="text-amber-400 font-bold text-sm mb-2 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-trophy"></i> 名人堂 (Top 30)
+          </h3>
+          <div id="leaderboardList" class="max-h-36 overflow-y-auto space-y-1 text-sm text-left px-2 custom-scrollbar">
+            <!-- 排名資料會由 JS 動態生成 -->
+            <div class="text-slate-500 text-center py-4 text-xs">載入中...</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 闖關成功畫面 (Victory Screen) -->
+      <div id="victoryScreen" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
+        <div class="text-5xl sm:text-6xl mb-2 animate-bounce">🏆</div>
+        <h2 class="text-2xl sm:text-4xl font-black text-amber-300 mb-2">太厲害了！闖關成功！</h2>
+        <p class="text-slate-300 text-sm sm:text-base mb-4">你成功駕駛足球無人機穿過了所有球門抵達終點！</p>
+        
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 w-64 mb-6 space-y-2 shadow-inner">
+          <div class="flex justify-between text-sm text-slate-400">
+            <span>最終得分</span>
+            <span id="finalScore" class="font-black text-amber-400 text-base">0</span>
+          </div>
+          <div class="flex justify-between text-sm text-slate-400">
+            <span>剩餘時間</span>
+            <span id="finalTime" class="font-black text-cyan-400 text-base">0s</span>
+          </div>
+          <div class="flex justify-between text-sm text-slate-400">
+            <span>評級</span>
+            <span id="finalRating" class="font-black text-emerald-400 text-base">⭐⭐⭐</span>
+          </div>
+        </div>
+
+        <div class="flex gap-3">
+          <button id="victoryHomeBtn" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm sm:text-base px-6 py-3 rounded-2xl border border-slate-600 transform active:scale-95 transition-all">
+            <i class="fa-solid fa-house"></i> 回主畫面
+          </button>
+          <button id="victoryRestartBtn" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-sm sm:text-base px-6 py-3 rounded-2xl shadow-lg shadow-emerald-500/30 transform active:scale-95 transition-all flex items-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i> 再玩一次
+          </button>
+        </div>
+      </div>
+
+      <!-- 失敗畫面 (Game Over Screen) -->
+      <div id="gameOverScreen" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
+        <div class="text-5xl sm:text-6xl mb-2 animate-pulse">💥</div>
+        <h2 id="gameOverTitle" class="text-2xl sm:text-4xl font-black text-rose-400 mb-2">加油！差一點就成功了！</h2>
+        <p id="gameOverDesc" class="text-slate-300 text-sm sm:text-base mb-4">無人機電量耗盡或時間到了，別灰心再試一次吧！</p>
+
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 w-64 mb-6 shadow-inner">
+          <div class="flex justify-between items-center text-sm text-slate-400">
+            <span>獲得分數</span>
+            <span id="failFinalScore" class="font-black text-amber-400 text-lg">0</span>
+          </div>
+        </div>
+        
+        <div class="flex gap-3">
+          <button id="gameOverHomeBtn" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm sm:text-base px-6 py-3 rounded-2xl border border-slate-600 transform active:scale-95 transition-all">
+            <i class="fa-solid fa-house"></i> 回主畫面
+          </button>
+          <button id="gameOverRestartBtn" class="bg-gradient-to-r from-rose-500 to-amber-600 hover:from-rose-400 hover:to-amber-500 text-white font-black text-sm sm:text-base px-6 py-3 rounded-2xl shadow-lg shadow-rose-500/30 transform active:scale-95 transition-all flex items-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i> 重新挑戰
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 螢幕方向鍵控制區 (適合平板/手機與小朋友點擊) -->
+    <div class="w-full mt-4 flex items-center justify-between gap-2 px-2">
+      <!-- 說明文字 -->
+      <div class="hidden sm:flex flex-col text-slate-400 text-xs gap-1">
+        <span class="flex items-center gap-1.5"><i class="fa-solid fa-lightbulb text-amber-400"></i> 小提示：穿過金色光環得 100 分！</span>
+        <span class="flex items-center gap-1.5"><i class="fa-solid fa-shield-halved text-cyan-400"></i> 撞到紅色浮標會損失一顆護盾。</span>
+      </div>
+
+      <!-- 十字操控盤 (D-Pad) -->
+      <div class="mx-auto flex flex-col items-center gap-1.5">
+        <!-- 上 -->
+        <button id="btnUp" class="touch-btn w-14 h-12 sm:w-16 sm:h-14 bg-sky-600 active:bg-sky-500 text-white rounded-2xl flex items-center justify-center text-xl font-bold shadow-md">
+          <i class="fa-solid fa-arrow-up"></i>
+        </button>
+        <!-- 左 / 下 / 右 -->
+        <div class="flex items-center gap-2">
+          <button id="btnLeft" class="touch-btn w-14 h-12 sm:w-16 sm:h-14 bg-sky-600 active:bg-sky-500 text-white rounded-2xl flex items-center justify-center text-xl font-bold shadow-md">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <button id="btnDown" class="touch-btn w-14 h-12 sm:w-16 sm:h-14 bg-sky-600 active:bg-sky-500 text-white rounded-2xl flex items-center justify-center text-xl font-bold shadow-md">
+            <i class="fa-solid fa-arrow-down"></i>
+          </button>
+          <button id="btnRight" class="touch-btn w-14 h-12 sm:w-16 sm:h-14 bg-sky-600 active:bg-sky-500 text-white rounded-2xl flex items-center justify-center text-xl font-bold shadow-md">
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 額外重設按鈕 -->
+      <div class="flex flex-col items-end">
+        <button id="manualResetBtn" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl border border-slate-600 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          強制重置
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // 排行榜與玩家資料處理 (LocalStorage)
+    const LEADERBOARD_KEY = 'soccerDroneLeaderboard';
+    let currentPlayerName = '';
+
+    function loadLeaderboard() {
+      const data = localStorage.getItem(LEADERBOARD_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveScore(name, finalScore) {
+      if (finalScore <= 0) return; // 0分不列入紀錄
+      let board = loadLeaderboard();
+      board.push({ name: name, score: finalScore, timestamp: Date.now() });
+      
+      // 排序: 分數由高到低，分數相同則時間較早的優先
+      board.sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        return a.timestamp - b.timestamp;
+      });
+      
+      // 保留前30名
+      board = board.slice(0, 30);
+      localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(board));
+      renderLeaderboard();
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+      );
+    }
+
+    function renderLeaderboard() {
+      const listContainer = document.getElementById('leaderboardList');
+      const board = loadLeaderboard();
+      
+      if (board.length === 0) {
+        listContainer.innerHTML = '<div class="text-slate-500 text-center py-4 text-xs">尚無成績紀錄，快來挑戰搶頭香！</div>';
+        return;
+      }
+      
+      listContainer.innerHTML = board.map((entry, index) => {
+        let rankColor = 'text-slate-400';
+        let rankIcon = `${index + 1}.`;
+        
+        // 前三名特別顏色與圖示
+        if (index === 0) { rankColor = 'text-amber-400'; rankIcon = '<i class="fa-solid fa-medal"></i>'; }
+        else if (index === 1) { rankColor = 'text-slate-300'; rankIcon = '<i class="fa-solid fa-medal"></i>'; }
+        else if (index === 2) { rankColor = 'text-amber-600'; rankIcon = '<i class="fa-solid fa-medal"></i>'; }
+        
+        return `
+          <div class="flex justify-between items-center py-1.5 border-b border-slate-700/50 last:border-0 hover:bg-slate-800/50 rounded px-1 transition-colors">
+            <span class="font-mono w-6 text-center ${rankColor} text-xs">${rankIcon}</span>
+            <span class="flex-1 truncate px-2 text-slate-200 font-bold">${escapeHTML(entry.name)}</span>
+            <span class="font-black text-cyan-300">${entry.score}</span>
+          </div>`;
+      }).join('');
+    }
+
+    // 建立輕量化音效合成器
+    const AudioEngine = {
+      ctx: null,
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      },
+      playRingPass() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.15);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      },
+      playHit() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.linearRampToValueAtTime(80, now + 0.2);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      },
+      playVictory() {
+        if (!this.ctx) return;
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((freq, index) => {
+          const now = this.ctx.currentTime + index * 0.12;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        });
+      }
+    };
+
+    // 遊戲狀態與參數
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const hpDisplay = document.getElementById('hpDisplay');
+    const progressBar = document.getElementById('progressBar');
+    const currentPlayerDisplay = document.getElementById('currentPlayerDisplay');
+
+    const startScreen = document.getElementById('startScreen');
+    const victoryScreen = document.getElementById('victoryScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const gameOverTitle = document.getElementById('gameOverTitle');
+    const gameOverDesc = document.getElementById('gameOverDesc');
+
+    let gameState = 'START'; 
+    let score = 0;
+    let timeLeft = 45;
+    let timerInterval = null;
+    let lastTime = 0;
+
+    // 關卡總長度
+    const WORLD_WIDTH = 3800;
+    const CANVAS_VIRTUAL_HEIGHT = 450;
+    const CANVAS_VIRTUAL_WIDTH = 800;
+
+    // 鍵盤輸入狀態
+    const keys = {
+      up: false,
+      down: false,
+      left: false,
+      right: false
+    };
+
+    // 玩家：足球無人機本體
+    const player = {
+      x: 100,
+      y: 220,
+      radius: 20,
+      vx: 0,
+      vy: 0,
+      speed: 0.55,
+      maxSpeed: 4.8,
+      friction: 0.94,
+      hp: 3,
+      invulnerableTimer: 0,
+      propellerAngle: 0,
+      trail: []
+    };
+
+    let rings = [];
+    let obstacles = [];
+    let particles = [];
+    let finishLine = {
+      x: WORLD_WIDTH - 250,
+      y: 0,
+      width: 40,
+      height: CANVAS_VIRTUAL_HEIGHT
+    };
+
+    // 初始化與重設關卡
+    function initLevel() {
+      score = 0;
+      timeLeft = 45;
+      player.x = 100;
+      player.y = CANVAS_VIRTUAL_HEIGHT / 2;
+      player.vx = 0;
+      player.vy = 0;
+      player.hp = 3;
+      player.invulnerableTimer = 0;
+      player.trail = [];
+      particles = [];
+
+      // 生成球門
+      rings = [];
+      const ringPositions = [
+        { x: 450, y: 220 },
+        { x: 800, y: 140 },
+        { x: 1150, y: 310 },
+        { x: 1550, y: 180 },
+        { x: 1950, y: 260 },
+        { x: 2350, y: 140 },
+        { x: 2750, y: 320 },
+        { x: 3150, y: 220 }
+      ];
+
+      ringPositions.forEach((pos, idx) => {
+        rings.push({
+          id: idx,
+          x: pos.x,
+          y: pos.y,
+          outerRadius: 42,
+          innerRadius: 26,
+          passed: false,
+          pulse: Math.random() * Math.PI * 2
+        });
+      });
+
+      // 生成障礙物
+      obstacles = [];
+      const obstacleConfigs = [
+        { x: 620, y: 220, r: 24, vy: 1.4, minY: 100, maxY: 350 },
+        { x: 980, y: 180, r: 26, vy: -1.6, minY: 80, maxY: 370 },
+        { x: 1350, y: 120, r: 25, vy: 1.8, minY: 90, maxY: 360 },
+        { x: 1350, y: 330, r: 25, vy: -1.8, minY: 90, maxY: 360 },
+        { x: 1750, y: 220, r: 28, vy: 2.0, minY: 110, maxY: 340 },
+        { x: 2150, y: 160, r: 24, vy: -1.8, minY: 80, maxY: 370 },
+        { x: 2550, y: 230, r: 26, vy: 2.2, minY: 90, maxY: 360 },
+        { x: 2950, y: 150, r: 25, vy: 1.7, minY: 100, maxY: 350 },
+        { x: 2950, y: 300, r: 25, vy: -1.7, minY: 100, maxY: 350 }
+      ];
+
+      obstacles = obstacleConfigs.map((cfg) => ({
+        ...cfg,
+        angle: 0
+      }));
+
+      updateUI();
+    }
+
+    function resizeCanvas() {
+      canvas.width = CANVAS_VIRTUAL_WIDTH;
+      canvas.height = CANVAS_VIRTUAL_HEIGHT;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // 鍵盤監聽
+    window.addEventListener('keydown', (e) => {
+      if (['ArrowUp', 'KeyW'].includes(e.code)) keys.up = true;
+      if (['ArrowDown', 'KeyS'].includes(e.code)) keys.down = true;
+      if (['ArrowLeft', 'KeyA'].includes(e.code)) keys.left = true;
+      if (['ArrowRight', 'KeyD'].includes(e.code)) keys.right = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (['ArrowUp', 'KeyW'].includes(e.code)) keys.up = false;
+      if (['ArrowDown', 'KeyS'].includes(e.code)) keys.down = false;
+      if (['ArrowLeft', 'KeyA'].includes(e.code)) keys.left = false;
+      if (['ArrowRight', 'KeyD'].includes(e.code)) keys.right = false;
+    });
+
+    // 觸控按鈕
+    function bindTouchBtn(elementId, keyName) {
+      const btn = document.getElementById(elementId);
+      const press = (e) => {
+        e.preventDefault();
+        AudioEngine.init();
+        keys[keyName] = true;
+        btn.classList.add('active');
+      };
+      const release = (e) => {
+        e.preventDefault();
+        keys[keyName] = false;
+        btn.classList.remove('active');
+      };
+
+      btn.addEventListener('mousedown', press);
+      btn.addEventListener('mouseup', release);
+      btn.addEventListener('mouseleave', release);
+      btn.addEventListener('touchstart', press, { passive: false });
+      btn.addEventListener('touchend', release, { passive: false });
+      btn.addEventListener('touchcancel', release, { passive: false });
+    }
+
+    bindTouchBtn('btnUp', 'up');
+    bindTouchBtn('btnDown', 'down');
+    bindTouchBtn('btnLeft', 'left');
+    bindTouchBtn('btnRight', 'right');
+
+    function updateUI() {
+      scoreDisplay.textContent = score;
+      timerDisplay.textContent = `${timeLeft}s`;
+      hpDisplay.textContent = '❤️'.repeat(Math.max(0, player.hp));
+      
+      const progress = Math.min(100, Math.max(0, (player.x / (finishLine.x)) * 100));
+      progressBar.style.width = `${progress}%`;
+    }
+
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (gameState === 'PLAYING') {
+          timeLeft--;
+          updateUI();
+          if (timeLeft <= 0) {
+            triggerGameOver('時間到了！', '時間已經耗盡，下次飛快一點就能完成囉！');
+          }
+        }
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+    }
+
+    function validateAndStart() {
+      const nameInput = document.getElementById('usernameInput');
+      const errorMsg = document.getElementById('nameError');
+      const nameVal = nameInput.value.trim();
+
+      if (!nameVal) {
+        errorMsg.classList.remove('hidden');
+        nameInput.classList.add('border-rose-500', 'bg-rose-950/20');
+        // 加入輕微震動動畫效果提示
+        nameInput.style.transform = 'translateX(5px)';
+        setTimeout(() => nameInput.style.transform = 'translateX(-5px)', 100);
+        setTimeout(() => nameInput.style.transform = 'translateX(5px)', 200);
+        setTimeout(() => nameInput.style.transform = 'translateX(0)', 300);
+        return;
+      }
+
+      errorMsg.classList.add('hidden');
+      nameInput.classList.remove('border-rose-500', 'bg-rose-950/20');
+      
+      currentPlayerName = nameVal;
+      currentPlayerDisplay.textContent = currentPlayerName;
+      startGame();
+    }
+
+    function startGame() {
+      AudioEngine.init();
+      initLevel();
+      gameState = 'PLAYING';
+      startScreen.classList.add('hidden');
+      victoryScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+      startTimer();
+    }
+
+    function returnToHome() {
+      gameState = 'START';
+      stopTimer();
+      renderLeaderboard();
+      startScreen.classList.remove('hidden');
+      victoryScreen.classList.add('hidden');
+      gameOverScreen.classList.add('hidden');
+      
+      // 復原玩家視圖位置預覽
+      player.x = 100;
+      player.y = CANVAS_VIRTUAL_HEIGHT / 2;
+      draw(); 
+    }
+
+    function triggerVictory() {
+      gameState = 'VICTORY';
+      stopTimer();
+      AudioEngine.playVictory();
+
+      // 計算時間額外獎勵
+      const timeBonus = timeLeft * 10;
+      const totalScore = score + timeBonus;
+      
+      // 儲存排行榜成績
+      saveScore(currentPlayerName, totalScore);
+
+      document.getElementById('finalScore').textContent = `${totalScore} (含時間獎勵 +${timeBonus})`;
+      document.getElementById('finalTime').textContent = `${timeLeft} 秒`;
+      
+      let rating = '⭐⭐⭐';
+      if (player.hp === 2) rating = '⭐⭐';
+      if (player.hp === 1) rating = '⭐';
+      document.getElementById('finalRating').textContent = rating;
+
+      victoryScreen.classList.remove('hidden');
+    }
+
+    function triggerGameOver(title, desc) {
+      gameState = 'GAMEOVER';
+      stopTimer();
+      AudioEngine.playHit();
+      
+      // 儲存排行榜成績
+      saveScore(currentPlayerName, score);
+
+      gameOverTitle.textContent = title;
+      gameOverDesc.textContent = desc;
+      document.getElementById('failFinalScore').textContent = score;
+
+      gameOverScreen.classList.remove('hidden');
+    }
+
+    // 按鈕事件綁定
+    document.getElementById('startBtn').addEventListener('click', validateAndStart);
+    
+    // 勝利與失敗畫面按鈕
+    document.getElementById('victoryRestartBtn').addEventListener('click', startGame);
+    document.getElementById('victoryHomeBtn').addEventListener('click', returnToHome);
+    
+    document.getElementById('gameOverRestartBtn').addEventListener('click', startGame);
+    document.getElementById('gameOverHomeBtn').addEventListener('click', returnToHome);
+    
+    document.getElementById('manualResetBtn').addEventListener('click', () => {
+      if (gameState === 'PLAYING') triggerGameOver('已強制重置', '重新開始你的挑戰吧！');
+      else returnToHome();
+    });
+
+    // 監聽 Enter 鍵直接開始
+    document.getElementById('usernameInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') validateAndStart();
+    });
+
+    function createConfetti(x, y, count = 25, colorSpread = false) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 5 + 2;
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: Math.random() * 5 + 3,
+          color: colorSpread ? `hsl(${Math.random() * 360}, 90%, 60%)` : '#fbbf24',
+          alpha: 1,
+          decay: Math.random() * 0.02 + 0.015
+        });
+      }
+    }
+
+    function updatePhysics() {
+      if (gameState !== 'PLAYING') return;
+
+      // 無人機方向控制加速
+      if (keys.up) player.vy -= player.speed;
+      if (keys.down) player.vy += player.speed;
+      if (keys.left) player.vx -= player.speed;
+      if (keys.right) player.vx += player.speed;
+
+      player.vx *= player.friction;
+      player.vy *= player.friction;
+
+      player.vx = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vx));
+      player.vy = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vy));
+
+      player.x += player.vx;
+      player.y += player.vy;
+
+      // 邊界限制
+      if (player.y - player.radius < 25) {
+        player.y = 25 + player.radius;
+        player.vy = 0;
+      }
+      if (player.y + player.radius > CANVAS_VIRTUAL_HEIGHT - 25) {
+        player.y = CANVAS_VIRTUAL_HEIGHT - 25 - player.radius;
+        player.vy = 0;
+      }
+      if (player.x - player.radius < 20) {
+        player.x = 20 + player.radius;
+        player.vx = 0;
+      }
+
+      // 螺旋槳自轉
+      player.propellerAngle += 0.45;
+
+      // 無人機尾跡特效
+      if (Math.hypot(player.vx, player.vy) > 0.5) {
+        player.trail.push({ x: player.x, y: player.y, alpha: 0.6 });
+      }
+      player.trail.forEach(t => t.alpha -= 0.03);
+      player.trail = player.trail.filter(t => t.alpha > 0);
+
+      // 受傷無敵閃爍計時
+      if (player.invulnerableTimer > 0) {
+        player.invulnerableTimer--;
+      }
+
+      // 球門光環 (Rings) 檢定
+      rings.forEach(ring => {
+        ring.pulse += 0.05;
+        if (!ring.passed) {
+          const dist = Math.hypot(player.x - ring.x, player.y - ring.y);
+          if (dist < ring.outerRadius && Math.abs(player.x - ring.x) < 20) {
+            ring.passed = true;
+            score += 100;
+            updateUI();
+            AudioEngine.playRingPass();
+            createConfetti(ring.x, ring.y, 25, false);
+          }
+        }
+      });
+
+      // 障礙物運動與碰撞檢定
+      obstacles.forEach(obs => {
+        obs.y += obs.vy;
+        if (obs.y < obs.minY || obs.y > obs.maxY) {
+          obs.vy *= -1;
+        }
+        obs.angle += 0.03;
+
+        if (player.invulnerableTimer <= 0) {
+          const dist = Math.hypot(player.x - obs.x, player.y - obs.y);
+          if (dist < player.radius + obs.r) {
+            player.hp--;
+            player.invulnerableTimer = 60; // 1秒無敵時間
+            player.vx = -player.vx * 1.5 - 2;
+            player.vy = (player.y - obs.y) * 0.2;
+            AudioEngine.playHit();
+            createConfetti(player.x, player.y, 15, true);
+            updateUI();
+
+            if (player.hp <= 0) {
+              triggerGameOver('無人機防護罩破裂！', '不小心碰撞太多次了，調整一下方向再出發！');
+            }
+          }
+        }
+      });
+
+      // 抵達終點檢定
+      if (player.x >= finishLine.x) {
+        createConfetti(finishLine.x + 20, CANVAS_VIRTUAL_HEIGHT / 2, 60, true);
+        triggerVictory();
+      }
+
+      // 更新粒子
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= p.decay;
+      });
+      particles = particles.filter(p => p.alpha > 0);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, CANVAS_VIRTUAL_WIDTH, CANVAS_VIRTUAL_HEIGHT);
+
+      // 鏡頭攝影機：平滑跟隨玩家橫向移動
+      const cameraX = Math.max(0, Math.min(player.x - CANVAS_VIRTUAL_WIDTH * 0.35, WORLD_WIDTH - CANVAS_VIRTUAL_WIDTH));
+
+      ctx.save();
+      ctx.translate(-cameraX, 0);
+
+      // 1. 繪製科技球場背景網格
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+      ctx.lineWidth = 1;
+      const gridSize = 40;
+      const startGridX = Math.floor(cameraX / gridSize) * gridSize;
+      for (let x = startGridX; x < cameraX + CANVAS_VIRTUAL_WIDTH + gridSize; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_VIRTUAL_HEIGHT);
+        ctx.stroke();
+      }
+      for (let y = 0; y < CANVAS_VIRTUAL_HEIGHT; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(cameraX, y);
+        ctx.lineTo(cameraX + CANVAS_VIRTUAL_WIDTH, y);
+        ctx.stroke();
+      }
+
+      // 上下安全防護欄杆
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(cameraX, 0, CANVAS_VIRTUAL_WIDTH, 16);
+      ctx.fillRect(cameraX, CANVAS_VIRTUAL_HEIGHT - 16, CANVAS_VIRTUAL_WIDTH, 16);
+
+      ctx.fillStyle = '#38bdf8';
+      for (let x = startGridX; x < cameraX + CANVAS_VIRTUAL_WIDTH; x += 30) {
+        ctx.fillRect(x, 6, 12, 4);
+        ctx.fillRect(x, CANVAS_VIRTUAL_HEIGHT - 10, 12, 4);
+      }
+
+      // 2. 繪製球門光環
+      rings.forEach(ring => {
+        ctx.save();
+        ctx.translate(ring.x, ring.y);
+        const glowColor = ring.passed ? '#10b981' : '#f59e0b';
+
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, ring.outerRadius);
+        ctx.lineTo(0, CANVAS_VIRTUAL_HEIGHT - ring.y - 16);
+        ctx.stroke();
+
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = ring.passed ? 10 : 18;
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = glowColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, ring.outerRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = ring.passed ? '#6ee7b7' : '#fef08a';
+        ctx.beginPath();
+        ctx.arc(0, 0, ring.innerRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.font = 'bold 12px Fredoka, sans-serif';
+        ctx.fillStyle = glowColor;
+        ctx.textAlign = 'center';
+        ctx.fillText(ring.passed ? '✓' : '+100', 0, 4);
+        ctx.restore();
+      });
+
+      // 3. 繪製障礙物
+      obstacles.forEach(obs => {
+        ctx.save();
+        ctx.translate(obs.x, obs.y);
+        ctx.rotate(obs.angle);
+
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 12;
+
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(0, 0, obs.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#1e1b4b';
+        ctx.beginPath();
+        ctx.arc(0, 0, obs.r * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-obs.r * 0.4, 0);
+        ctx.lineTo(obs.r * 0.4, 0);
+        ctx.moveTo(0, -obs.r * 0.4);
+        ctx.lineTo(0, obs.r * 0.4);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // 4. 繪製終點大門
+      ctx.save();
+      const fx = finishLine.x;
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(fx, 16, 24, CANVAS_VIRTUAL_HEIGHT - 32);
+
+      for (let y = 16; y < CANVAS_VIRTUAL_HEIGHT - 32; y += 24) {
+        ctx.fillStyle = ((Math.floor(y / 24)) % 2 === 0) ? '#ffffff' : '#047857';
+        ctx.fillRect(fx + 2, y, 20, 24);
+      }
+
+      ctx.shadowColor = '#10b981';
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = '#fef08a';
+      ctx.font = '900 24px Noto Sans TC, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🏁 終點 GOAL 🏁', fx + 12, CANVAS_VIRTUAL_HEIGHT / 2);
+      ctx.restore();
+
+      // 5. 繪製無人機尾跡
+      player.trail.forEach(t => {
+        ctx.fillStyle = `rgba(56, 189, 248, ${t.alpha * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, player.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 6. 繪製主角：足球無人機
+      if (player.invulnerableTimer % 6 < 3) {
+        ctx.save();
+        ctx.translate(player.x, player.y);
+
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 15;
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, player.radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2.5;
+        for (let a = 0; a < 4; a++) {
+          const armAngle = (Math.PI / 2) * a + Math.PI / 4;
+          const armX = Math.cos(armAngle) * (player.radius + 7);
+          const armY = Math.sin(armAngle) * (player.radius + 7);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(armX, armY);
+          ctx.stroke();
+
+          ctx.save();
+          ctx.translate(armX, armY);
+          ctx.rotate(player.propellerAngle * (a % 2 === 0 ? 1 : -1));
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.7)';
+          ctx.fillRect(-7, -1.5, 14, 3);
+          ctx.restore();
+        }
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+          const rad = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+          const px = Math.cos(rad) * (player.radius * 0.38);
+          const py = Math.sin(rad) * (player.radius * 0.38);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        for (let i = 0; i < 5; i++) {
+          const rad = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+          const bx = Math.cos(rad) * (player.radius * 0.85);
+          const by = Math.sin(rad) * (player.radius * 0.85);
+          ctx.beginPath();
+          ctx.arc(bx, by, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = '#06b6d4';
+        ctx.beginPath();
+        ctx.roundRect(-8, -4, 16, 8, 3);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(-3, -2, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      // 7. 繪製粒子效果
+      particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      ctx.restore();
+    }
+
+    function gameLoop(timestamp) {
+      updatePhysics();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    window.onload = function() {
+      resizeCanvas();
+      renderLeaderboard(); // 預載排行榜
+      
+      // 先畫一次靜態背景作為預覽
+      initLevel();
+      draw();
+      
+      requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>
